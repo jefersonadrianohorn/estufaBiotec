@@ -1,0 +1,661 @@
+#include <ESPmDNS.h>
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <DHT.h>
+#include <HTTPClient.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+#include <EEPROM.h>
+
+const int portaAnalogica = 32;
+const int numLeituras = 100;
+const float soloSeco = 2558.93;
+const float soloUmido = 1136.86;
+const int pinoLED = 2;
+int exaustorPin = 12;
+int irrigacaoPin = 13;
+int dhtPin = 26;
+int dhtType = DHT22;
+DHT dht(dhtPin, dhtType);
+
+AsyncWebServer servidorWeb(80);
+const int portaGPIO = 25;
+unsigned long tempoInicio = 0;
+bool avisoEnviado = false;
+bool estado_porta = LOW;
+const char *ssid = "Marli";
+const char *password = "Chacarabeijaflor@1975";
+float umidadeSoloAtual = 0.0;
+const char *sheetMonkeyURL = "https://api.sheetmonkey.io/form/uSrThETU8kuqJ6fbnTV9U3";
+unsigned long ultimaTransmissao = 0;
+const unsigned long intervaloEnvio = 30000;
+float umidadeSolo = 0.0;
+float umidade = 0.0;
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+const long gmtOffset_sec = 0;
+const int daylightOffset_sec = 0;
+char ultima_irrigacao[13];  // Declare this variable globally
+int eepromAddress = 0;
+void configurarWiFi() {
+  Serial.println("Conectando à rede Wi-Fi...");
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Tentando conectar à rede Wi-Fi...");
+  }
+
+  Serial.println("Conectado à rede Wi-Fi com sucesso!");
+  Serial.print("Endereço IP atribuído pelo DHCP: ");
+  Serial.println(WiFi.localIP());
+}
+
+void configurarServidorWeb() {
+  servidorWeb.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String html = "<!DOCTYPE html>"
+                  "<html lang='en'>"
+                  "<head>"
+                  "<meta charset='UTF-8'>"
+                  "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+                  "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap'>"
+
+                  "<style>"
+                  "body {"
+                  "font-family: 'Montserrat', sans-serif;"
+                  "text-align: center;"
+                  "margin: 0;"
+                  "padding: 0;"
+                  "background-color: #f7f7f7;"
+                  "color: #333;"
+                  "}"
+
+                  "h1 {"
+                  "margin-top: 20px;"
+                  "color: #3498db;"
+                  "}"
+
+                  ".dashboard {"
+                  "display: flex;"
+                  "justify-content: space-around;"
+                  "flex-wrap: wrap;"
+                  "padding: 20px;"
+                  "}"
+
+                  ".block {"
+                  "width: 48%;"
+                  "padding: 20px;"
+                  "background-color: #fff;"
+                  "border-radius: 10px;"
+                  "box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);"
+                  "margin-bottom: 20px;"
+                  "position: relative;"
+                  "}"
+
+                  "h2 {"
+                  "position: sticky;"
+                  "top: 0;"
+                  "background-color: #fff;"
+                  "padding: 10px;"
+                  "border-bottom: 1px solid #ddd;"
+                  "text-align: center;"
+                  "z-index: 1;"
+                  "}"
+
+                  ".switch-container,"
+                  ".alert-container {"
+                  "display: flex;"
+                  "flex-direction: column;"
+                  "align-items: center;"
+                  "}"
+
+                  ".sensor-container {"
+                  "display: flex;"
+                  "justify-content: space-around;"
+                  "align-items: center;"
+                  "flex-wrap: wrap;"
+                  "}"
+
+                  ".switch {"
+                  "display: flex;"
+                  "justify-content: space-between;"
+                  "align-items: center;"
+                  "margin-bottom: 20px;"
+                  "width: 100%;"
+                  "}"
+
+                  ".switch-label {"
+                  "flex-grow: 1;"
+                  "margin: 0 10px;"
+                  "font-weight: bold;"
+                  "color: #555;"
+                  "}"
+
+                  ".switch-input {"
+                  "display: none;"
+                  "}"
+
+                  ".switch-slider {"
+                  "position: relative;"
+                  "width: 50px;"
+                  "height: 24px;"
+                  "background-color: #ccc;"
+                  "border-radius: 12px;"
+                  "cursor: pointer;"
+                  "}"
+
+                  ".switch-slider:before {"
+                  "content: '';"
+                  "position: absolute;"
+                  "top: 2px;"
+                  "left: 2px;"
+                  "width: 20px;"
+                  "height: 20px;"
+                  "background-color: white;"
+                  "border-radius: 50%;"
+                  "transition: 0.4s;"
+                  "}"
+
+                  ".switch-input:checked+.switch-slider:before {"
+                  "transform: translateX(26px);"
+                  "background-color: #4ece49;"
+                  "}"
+
+                  ".switch-slider.round {"
+                  "border-radius: 24px;"
+                  "}"
+
+                  ".switch-slider.round:before {"
+                  "border-radius: 50%;"
+                  "}"
+
+                  ".sensor-label {"
+                  "margin-bottom: 15px;"
+                  "font-size: 25px;"
+                  "color: #000000;"
+                  "}"
+
+                  ".sensor-value {"
+                  "font-size: 18px;"
+                  "font-weight: bold;"
+                  "color: #333;"
+                  "display: flex;"
+                  "align-items: center;"
+                  "justify-content: center;"
+                  "}"
+
+                  ".sensor-value img {"
+                  "margin-right: 10px;"
+                  "width: 40px;"
+                  "height: 40px;"
+                  "}"
+
+                  ".rotate-animation {"
+                  "animation-name: rotate;"
+                  "animation-duration: 2s;"
+                  "animation-iteration-count: infinite;"
+                  "animation-timing-function: linear;"
+                  "}"
+
+                  ".alert-icon {"
+                  "width: 65px;"
+                  "height: 65px;"
+                  "}"
+
+                  ".status-table {"
+                  "width: 100%;"
+                  "margin-top: 20px;"
+                  "border-collapse: collapse;"
+                  "border: 1px solid #ddd;"
+                  "border-radius: 10px;"
+                  "overflow: hidden;"
+                  "}"
+
+                  ".status-table th,"
+                  ".status-table td {"
+                  "padding: 15px;"
+                  "text-align: left;"
+                  "border-bottom: 1px solid #ddd;"
+                  "}"
+
+                  ".status-table th {"
+                  "background-color: #123a06;"
+                  "color: white;"
+                  "}"
+
+                  ".status-table td {"
+                  "background-color: #f9f9f9;"
+                  "}"
+
+                  ".iframe-container {"
+                  "width: 100%;"
+                  "overflow: hidden;"
+                  "margin-top: 20px;"
+                  "}"
+
+                  ".responsive-iframe {"
+                  "width: 100%;"
+                  "height: 400px;"
+                  "/* Ajuste a altura conforme necessário */"
+                  "border: none;"
+                  "}"
+
+                  "@keyframes rotate {"
+                  "from {"
+                  "transform: rotate(0deg);"
+                  "}"
+
+                  "to {"
+                  "transform: rotate(360deg);"
+                  "}"
+                  "}"
+
+                  "@media screen and (max-width: 600px) {"
+                  ".block {"
+                  "width: 90%;"
+                  "padding: 15px;"
+                  "}"
+
+                  ".switch-label {"
+                  "font-size: 14px;"
+                  "}"
+
+                  ".sensor-label {"
+                  "font-size: 14px;"
+                  "}"
+
+                  ".sensor-value {"
+                  "font-size: 20px;"
+                  "}"
+
+                  ".sensor-value img {"
+                  "width: 30px;"
+                  "height: 30px;"
+                  "margin-right: 0;"
+                  "margin-bottom: 5px;"
+                  "}"
+                  "}"
+                  "</style>"
+                  "</head>"
+
+                  "<body>"
+                  "<h1>Painel Estufa Biotec</h1>"
+                  "<div class='dashboard'>"
+                  "<!-- Bloco de Atuadores -->"
+                  "<div class='block switch-container'>"
+                  "<h2>Atuadores</h2>"
+                  "<div class='switch'>"
+                  "<img src='https://jefersonadrianohorn.github.io/estufaBiotec/helice_rodando.png' width='80' height='80'"
+                  "id='exhaust-image' />"
+                  "<span class='switch-label'>Exaustor</span>"
+                  "<label class='switch'>"
+                  "<input type='checkbox' class='switch-input' id='exhaust-switch' onclick='alternarExaustor()'>"
+                  "<span class='switch-slider round'></span>"
+                  "</label>"
+                  "</div>"
+                  "<div class='switch'>"
+                  "<img src='https://jefersonadrianohorn.github.io/estufaBiotec/irriga%C3%A7%C3%A3o.png' width='80' height='80' />"
+                  "<span class='switch-label'>Irrigação</span>"
+                  "<label class='switch'>"
+                  "<input type='checkbox' class='switch-input' id='irrigation-switch' onclick='alternarIrrigacao()'>"
+                  "<span class='switch-slider round'></span>"
+                  "</label>"
+                  "</div>"
+                  "</div>"
+                  "<div class='block'>"
+                  "<h2>Última Irrigação</h2>"
+                  "<div id='ultima_irrigacao'></div>"
+
+                  "</div>"
+                  "<!-- Bloco de Dados -->"
+                  "<div class='block sensor-container'>"
+                  "<div>"
+                  "<h2>Dados</h2>"
+                  "<div class='sensor-label'>Temperatura</div>"
+                  "<div class='sensor-value' id='temperature-value'>"
+                  "<img src='https://jefersonadrianohorn.github.io/estufaBiotec/temperatura.png' alt='Ícone de temperatura'>"
+                  "<span id='temperature'></span> °C"
+                  "</div>"
+                  "</div>"
+                  "<div>"
+                  "<h2>&nbsp;</h2>"
+                  "<div class='sensor-label'>Umidade do Ar</div>"
+                  "<div class='sensor-value' id='humidity-value'>"
+                  "<img src='https://jefersonadrianohorn.github.io/estufaBiotec/umidade_Ar.png' alt='Ícone de umidade'>"
+                  "<span id='humidity'></span> %"
+                  "</div>"
+                  "</div>"
+                  "<div>"
+                  "<h2>&nbsp;</h2>"
+                  "<div class='sensor-label'>Umidade do Solo</div>"
+                  "<div class='sensor-value' id='soil-moisture-value'>"
+                  "<img src='https://jefersonadrianohorn.github.io/estufaBiotec/Umidade_Solo.png' alt='Ícone de umidade do solo'>"
+                  "<span id='soil-moisture'></span> %"
+                  "</div>"
+                  "</div>"
+                  "</div>"
+                  "<!-- Bloco de Alerta -->"
+                  "<div class='block alert-container'>"
+                  "<h2>Alerta</h2>"
+                  "<table class='status-table'>"
+                  "<tr>"
+                  "<th>Status da Porta</th>"
+                  "<td id='door-status-value' class='door-status-text'></td>"
+                  "</tr>"
+                  "<tr>"
+                  "<th>Alerta</th>"
+                  "<td>"
+                  "<img src='https://jefersonadrianohorn.github.io/estufaBiotec/alerta.gif' alt='Ícone de alerta'"
+                  "class='alert-icon' id='door-alert-icon' style='display: none;'>"
+                  "</td>"
+                  "</tr>"
+                  "</table>"
+                  "</div>"
+                  "<!-- IFrame -->"
+                  "<div class='block iframe-container'>"
+                  "<iframe class='responsive-iframe' src='https://www.example.com' frameborder='0' allowfullscreen></iframe>"
+                  "</div>"
+                  "</div>"
+                  "<script>"
+                  "function alternarExaustor() {"
+                  "var xhr = new XMLHttpRequest();"
+                  "xhr.open('GET', '/alternarExaustor', true);"
+                  "xhr.send();"
+                  "}"
+
+                  "function alternarIrrigacao() {"
+                  "var xhr = new XMLHttpRequest();"
+                  "xhr.open('GET', '/alternarIrrigacao', true);"
+                  "xhr.send();"
+                  "}"
+
+                  "function atualizarEstado() {"
+                  "var xhr = new XMLHttpRequest();"
+                  "xhr.onreadystatechange = function () {"
+                  "if (this.readyState == 4 && this.status == 200) {"
+                  "var estado = JSON.parse(this.responseText);"
+                  "document.getElementById('exhaust-switch').checked = estado.estadoExaustor;"
+                  "document.getElementById('irrigation-switch').checked = estado.estadoIrrigacao;"
+                  "document.getElementById('temperature').innerText = estado.temperatura;"
+                  "document.getElementById('humidity').innerText = estado.umidade;"
+                  "document.getElementById('soil-moisture').innerText = estado.umidadeSolo;"
+                  "var exhaustImage = document.getElementById('exhaust-image');"
+                  "if (estado.estadoExaustor) {"
+                  "exhaustImage.src = 'https://jefersonadrianohorn.github.io/estufaBiotec/helice_rodando.png';"
+                  "exhaustImage.classList.add('rotate-animation');"
+                  "} else {"
+                  "exhaustImage.src = 'https://jefersonadrianohorn.github.io/estufaBiotec/helice_rodando.png';"
+                  "exhaustImage.classList.remove('rotate-animation');"
+                  "}"
+                  "document.getElementById('door-status-value').innerText = estado.estadoPorta ? 'Porta Aberta' : 'Porta Fechada';"
+                  "var doorAlertIcon = document.getElementById('door-alert-icon');"
+                  "doorAlertIcon.style.display = estado.estadoPorta ? 'inline' : 'none';"
+                  "document.getElementById('ultima_irrigacao').innerText = estado.ultima_irrigacao;"
+                  "}"
+                  "};"
+                  "xhr.open('GET', '/obterEstado', true);"
+                  "xhr.send();"
+                  "}"
+
+                  "setInterval(atualizarEstado, 1000);"
+                  "</script>"
+                  "</body>"
+                  "</html>";
+
+
+    request->send(200, "text/html", html);
+  });
+
+  servidorWeb.on("/alternarExaustor", HTTP_GET, [](AsyncWebServerRequest *request) {
+    digitalWrite(exaustorPin, !digitalRead(exaustorPin));
+    request->send(200);
+  });
+
+  servidorWeb.on("/alternarIrrigacao", HTTP_GET, [](AsyncWebServerRequest *request) {
+    digitalWrite(irrigacaoPin, !digitalRead(irrigacaoPin));
+    request->send(200);
+  });
+  servidorWeb.on("/obterEstado", HTTP_GET, [](AsyncWebServerRequest *request) {
+    bool estadoExaustor = digitalRead(exaustorPin);
+    bool estadoIrrigacao = digitalRead(irrigacaoPin);
+    float temperatura = dht.readTemperature();
+    float umidade = dht.readHumidity();
+    float umidadeSoloAtualWeb = umidadeSoloAtual;  // Obtenha a umidade do solo atualizada para a página web
+    int estadoPorta = digitalRead(portaGPIO);      // Lê o estado atual da porta
+    String estadoJson = "{\"estadoExaustor\":" + String(estadoExaustor) + ",\"estadoIrrigacao\":" + String(estadoIrrigacao) + ",\"temperatura\":" + String(temperatura) + ",\"umidade\":" + String(umidade) + ",\"umidadeSolo\":" + String(umidadeSoloAtualWeb) + ",\"estadoPorta\":" + String(estadoPorta) + ",\"ultima_irrigacao\":\"" + String(ultima_irrigacao) + "\"}";
+    request->send(200, "application/json", estadoJson);
+  });
+
+
+
+  servidorWeb.begin();
+}
+void verificarEstadoPorta() {
+  int novoEstadoPorta = digitalRead(portaGPIO);  // Lê o estado da porta
+
+  if (novoEstadoPorta != estado_porta) {
+    tempoInicio = millis();          // Reseta o tempo sempre que o estado da porta mudar
+    estado_porta = novoEstadoPorta;  // Atualiza o estado da porta
+  }
+
+  if (estado_porta == HIGH && millis() - tempoInicio >= 1500 && !avisoEnviado) {
+    Serial.println("Estado HIGH detectado por mais de 15 segundos!");
+    digitalWrite(pinoLED, HIGH);
+    // Outras ações podem ser incluídas aqui, se necessário
+    avisoEnviado = true;  // Define a flag de aviso para evitar repetição
+  }
+
+  if (estado_porta == LOW) {
+    avisoEnviado = false;  // Reseta a flag de aviso se o estado da porta mudar para LOW
+  }
+}
+void enviarDadosParaSheetMonkey(float temperatura, float umidade, float umidadeSoloAtual) {
+  HTTPClient http;
+  http.begin(sheetMonkeyURL);
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+  String postData = "temperatura=" + String(temperatura) + "&umidade=" + String(umidade) + "&umidadeSoloAtual=" + String(umidadeSoloAtual);
+
+  int httpCode = http.POST(postData);
+
+  if (httpCode > 0) {
+    Serial.print("Resposta do servidor: ");
+    Serial.println(http.getString());
+  } else {
+    Serial.println("Falha na requisição HTTP.");
+  }
+
+  http.end();
+}
+
+void enviarDadosPeriodicamente(float temperatura, float umidade, float umidadeSoloAtual) {
+  unsigned long tempoAtual = millis();
+
+  // Realiza o envio dos dados a cada intervalo definido
+  if (tempoAtual - ultimaTransmissao >= intervaloEnvio) {
+    enviarDadosParaSheetMonkey(temperatura, umidade, umidadeSoloAtual);
+    ultimaTransmissao = tempoAtual;
+  }
+}
+void cicloIrrigacao() {
+  static unsigned long tempoInicio = 0;
+
+  // Verifica se passou 1 minuto (60000 milissegundos)
+  if (millis() - tempoInicio >= 60000) {
+    // Alterna o estado do rele
+    if (digitalRead(irrigacaoPin) == LOW) {
+      // Liga o rele
+      digitalWrite(irrigacaoPin, HIGH);
+      Serial.println("Iniciando ciclo...");
+    } else {
+      // Desliga o rele
+      digitalWrite(irrigacaoPin, LOW);
+      Serial.println("Finalizando ciclo...");
+      cria_string();
+    }
+
+    tempoInicio = millis();  // Reinicia o contador de tempo
+  }
+}
+
+void verificarHorario() {
+  Serial.print("Verificando horário de irrigação...");
+
+  // Atualiza o cliente NTP para obter o horário atual
+  timeClient.update();
+
+  // Obtém a hora e o minuto atuais
+  int horaAtual = timeClient.getHours();
+  int minutoAtual = timeClient.getMinutes();
+
+  // Calcula o total de minutos desde a meia-noite
+  int totalMinutos = horaAtual * 60 + minutoAtual;
+
+  // Define o novo intervalo de irrigação desejado (15:12 às 15:16)
+  int inicioMinutosNovo = 15 * 60 + 22;
+  int fimMinutosNovo = 15 * 60 + 23;
+
+  // Verifica se o horário atual está dentro do novo intervalo de irrigação
+  if (totalMinutos >= inicioMinutosNovo && totalMinutos <= fimMinutosNovo) {
+    Serial.println(" Está na hora de irrigar!");
+    cicloIrrigacao();
+  } else {
+    Serial.println(" Ainda não é hora de irrigar.");
+    digitalWrite(irrigacaoPin, LOW);
+  }
+}
+
+
+
+void escreverEEPROM() {
+  EEPROM.begin(512);  // Inicializa a EEPROM
+  for (int i = 0; i < sizeof(ultima_irrigacao); i++) {
+    EEPROM.write(eepromAddress + i, ultima_irrigacao[i]);
+  }
+  EEPROM.commit();  // Salva as alterações
+  EEPROM.end();     // Libera a EEPROM
+}
+
+void lerEEPROM() {
+  EEPROM.begin(512);  // Inicializa a EEPROM
+  for (int i = 0; i < sizeof(ultima_irrigacao); i++) {
+    ultima_irrigacao[i] = EEPROM.read(eepromAddress + i);
+  }
+  EEPROM.end();  // Libera a EEPROM
+}
+
+void cria_string() {
+  timeClient.update();
+
+  time_t epochTime = timeClient.getEpochTime();
+
+  struct tm *timeInfo;
+  timeInfo = localtime(&epochTime);
+
+  snprintf(ultima_irrigacao, sizeof(ultima_irrigacao), "%02d%02d%04d%02d%02d",
+           timeInfo->tm_mday, timeInfo->tm_mon + 1, timeInfo->tm_year + 1900,
+           timeInfo->tm_hour, timeInfo->tm_min);
+
+  // Adicione mensagens de depuração
+  Serial.print("Última irrigação atualizada: ");
+  Serial.println(ultima_irrigacao);
+
+  // Grava na EEPROM
+  escreverEEPROM();
+}
+
+
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(exaustorPin, OUTPUT);
+  pinMode(irrigacaoPin, OUTPUT);
+  dht.begin();
+
+  configurarWiFi();
+  configurarServidorWeb();
+
+  if (!MDNS.begin("estufa")) {
+    Serial.println("Error setting up MDNS responder!");
+    while (1) {
+      delay(1000);
+    }
+  }
+  Serial.println("mDNS responder started");
+  analogReadResolution(12);          // Define a resolução da leitura analógica como 12 bits (0-4095)
+  pinMode(pinoLED, OUTPUT);          // Define o pino do LED como saída
+  pinMode(portaGPIO, INPUT_PULLUP);  // Ativa o pull-up interno na porta GPIO 25
+                                     // Inicializa o cliente de tempo (NTP)
+  timeClient.begin();
+
+  // Configuração do fuso horário do Brasil (GMT-3)
+  timeClient.setTimeOffset(-3 * 3600);  // Ajuste de fuso horário em segundos
+  cria_string();
+}
+void loop() {
+
+  timeClient.update();  // Atualiza a hora do servidor NTP
+
+
+  float temperatura = dht.readTemperature();
+  float umidade = dht.readHumidity();
+
+  // Controle do exaustor baseado na temperatura
+  if (temperatura > 35.0) {           // Modificado para 35 graus Celsius
+    digitalWrite(exaustorPin, HIGH);  // Liga o exaustor
+  } else {
+    delay(2500);
+    digitalWrite(exaustorPin, LOW);  // Desliga o exaustor se a temperatura estiver abaixo de 35 graus Celsius
+  }
+
+
+  // Leitura e controle do sensor de umidade do solo
+  int somaLeituras = 0;  // Variável para armazenar a soma das leituras
+
+  for (int i = 0; i < numLeituras; i++) {
+    int leitura = analogRead(portaAnalogica);  // Realiza a leitura analógica
+    somaLeituras += leitura;                   // Adiciona a leitura atual à soma total
+    delay(100);                                // Aguarda um breve intervalo entre as leituras (ajuste conforme necessário)
+  }
+
+  float media = somaLeituras / (float)numLeituras;  // Calcula a média das leituras
+
+  float umidadePercentual = map(media, soloUmido, soloSeco, 100, 0);  // Calcula a porcentagem de umidade do solo
+
+  if (umidadePercentual < 0) {
+    digitalWrite(pinoLED, HIGH);  // Acende o LED se o valor for negativo (fora do solo)
+    Serial.println("Sensor fora do solo!");
+  } else {
+    digitalWrite(pinoLED, LOW);  // Desliga o LED se o valor for positivo (dentro do solo)
+    Serial.print("Média das ");
+    Serial.print(numLeituras);
+    Serial.print(" leituras: ");
+    Serial.print(media);
+    Serial.print(" | Umidade do solo: ");
+    Serial.print(umidadePercentual);
+    Serial.println("%");
+    umidadeSoloAtual = umidadePercentual;  // Armazena o valor da umidade do solo na variável global
+  }
+
+  delay(10);  // Aguarda um segundo antes da próxima medição (ajuste conforme necessário)
+
+  verificarEstadoPorta();                                             // Chama a função para verificar o estado da porta
+  enviarDadosPeriodicamente(temperatura, umidade, umidadeSoloAtual);  // Envia os dados periodicamente
+  verificarHorario();
+
+
+  // Obtém a hora atual
+  int horaAtual = timeClient.getHours();
+  int minutoAtual = timeClient.getMinutes();
+  int segundoAtual = timeClient.getSeconds();
+
+  // Imprime a hora no monitor serial
+  Serial.print("Hora: ");
+  Serial.print(horaAtual);
+  Serial.print(":");
+  Serial.print(minutoAtual);
+  Serial.print(":");
+  Serial.println(segundoAtual);
+}
