@@ -1,0 +1,77 @@
+#include <EEPROM.h>
+
+const int TAMANHO_STRING = 14;  // Tamanho da string a ser lida (251220231213)
+
+void setup() {
+  Serial.begin(115200);
+  EEPROM.begin(512);  // Inicializa a EEPROM com um tamanho específico (512 bytes neste exemplo)
+  
+  // Leitura do valor armazenado na EEPROM
+  String valorArmazenado = lerValorDaEEPROM();
+  Serial.print("Valor armazenado na EEPROM: ");
+  Serial.println(valorArmazenado);
+  
+  // Exibir a data e hora formatadas
+  exibirDataHoraFormatadas(valorArmazenado);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    // Se houver dados disponíveis na porta serial
+    String input = Serial.readStringUntil('\n');  // Lê a linha da serial
+    
+    // Divide a string em partes e grava na EEPROM
+    dividirEGravarNaEEPROM(input);
+    
+    Serial.println("Valor recebido e armazenado na EEPROM.");
+
+    // Leitura do novo valor armazenado na EEPROM
+    String novoValorArmazenado = lerValorDaEEPROM();
+    Serial.print("Novo valor armazenado na EEPROM: ");
+    Serial.println(novoValorArmazenado);
+    
+    // Exibir a data e hora formatadas
+    exibirDataHoraFormatadas(novoValorArmazenado);
+  }
+}
+
+void dividirEGravarNaEEPROM(String valor) {
+  for (int i = 0; i < TAMANHO_STRING; i++) {
+    // Grava cada caractere na EEPROM em posições consecutivas
+    EEPROM.write(i, valor[i]);
+  }
+  EEPROM.commit();  // Salva as alterações na EEPROM
+}
+
+String lerValorDaEEPROM() {
+  String valor = "";
+  for (int i = 0; i < TAMANHO_STRING; i++) {
+    char caractere = EEPROM.read(i);
+    if (caractere == '\0') {
+      break;  // Se encontrar um caractere nulo, para a leitura
+    }
+    valor += caractere;
+  }
+  return valor;
+}
+
+void exibirDataHoraFormatadas(String valor) {
+  if (valor.length() == TAMANHO_STRING) {
+    String data = valor.substring(0, 8);
+    String hora = valor.substring(8);
+    Serial.print("Data: ");
+    Serial.print(data.substring(0, 2)); // Dia
+    Serial.print("/");
+    Serial.print(data.substring(2, 4)); // Mês
+    Serial.print("/");
+    Serial.print(data.substring(4));    // Ano
+    Serial.print(" Hora: ");
+    Serial.print(hora.substring(0, 2)); // Hora
+    Serial.print(":");
+    Serial.print(hora.substring(2, 4)); // Minuto
+    Serial.print(":");
+    Serial.println(hora.substring(4));    // Segundo
+  } else {
+    Serial.println("Formato de string inválido.");
+  }
+}
