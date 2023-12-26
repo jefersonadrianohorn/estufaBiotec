@@ -1,0 +1,106 @@
+#include <DHT.h>
+#include <WiFi.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+
+const int dhtPin = 26;
+const int relayPin = 13;
+
+DHT dht(dhtPin, DHT22);
+
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+
+const int irrigacaoDuration = 300000;  // 5 minutos de irrigação
+const int intervaloVerificacao = 1000; // Verificar a cada segundo
+
+enum EstadoCiclo {
+  INATIVO,
+  INICIANDO,
+  IRRIGANDO,
+  FINALIZANDO
+};
+
+EstadoCiclo estadoCiclo = INATIVO;
+unsigned long tempoInicioCiclo = 0;
+
+void configurarWiFi() {
+  // Configurar WiFi aqui
+}
+
+void configurarSensor() {
+  dht.begin();
+}
+
+void configurarRele() {
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW);  // Inicia o relé desligado
+}
+
+void configurarNTP() {
+  timeClient.begin();
+  timeClient.setTimeOffset(-3 * 3600); // Ajuste de fuso horário em segundos
+}
+
+void iniciarCicloIrrigacao() {
+  estadoCiclo = INICIANDO;
+  tempoInicioCiclo = millis();
+  digitalWrite(relayPin, HIGH);  // Liga o relé
+}
+
+void verificarCicloIrrigacao() {
+  switch (estadoCiclo) {
+    case INATIVO:
+      break;
+
+    case INICIANDO:
+      if (millis() - tempoInicioCiclo >= 2000) { // Tempo de inicialização (2 segundos)
+        estadoCiclo = IRRIGANDO;
+        Serial.println("Iniciando irrigação...");
+      }
+      break;
+
+    case IRRIGANDO:
+      if (millis() - tempoInicioCiclo >= irrigacaoDuration) {
+        estadoCiclo = FINALIZANDO;
+        digitalWrite(relayPin, LOW); // Desliga o relé
+        Serial.println("Finalizando irrigação...");
+      }
+      break;
+
+    case FINALIZANDO:
+      if (millis() - tempoInicioCiclo >= 2000) { // Tempo de finalização (2 segundos)
+        estadoCiclo = INATIVO;
+        Serial.println("Ciclo de irrigação concluído.");
+      }
+      break;
+  }
+}
+
+void verificarHorario() {
+  timeClient.update();
+  int horaAtual = timeClient.getHours();
+
+  // Adicione aqui sua lógica para determinar se é hora de iniciar o ciclo de irrigação
+  // Por exemplo, você pode verificar se está entre determinadas horas do dia.
+  // Neste exemplo, será iniciado entre 10 e 11 horas.
+  if (horaAtual >= 10 && horaAtual < 11 && estadoCiclo == INATIVO) {
+    iniciarCicloIrrigacao();
+  }
+}
+
+void loop() {
+  timeClient.update();
+  
+  verificarCicloIrrigacao();
+  verificarHorario();
+
+  float temperatura = dht.readTemperature();
+  float umidade = dht.readHumidity();
+
+  // Adicione aqui suas ações baseadas em temperatura e umidade
+  // Por exemplo, ligue ou desligue o exaustor ou realize outras ações.
+
+  // Aguarde antes da próxima leitura
+  delay(intervaloVerificacao);
+}
