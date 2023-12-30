@@ -389,8 +389,8 @@ void configurarServidorWeb() {
 "</table>"
 "</div>"
 "<p id='modo-atual'>Modo Atual:</p>"
-"<button class='botao-elegante' onclick='alterarModo('manual')'>Modo Manual</button>"
-"<button class='botao-elegante' onclick='alterarModo('autonomo')''>Modo Autônomo</button>"
+"<button class='botao-elegante' onclick='alterarModo(\"manual\")'>Modo Manual</button>"
+"<button class='botao-elegante' onclick='alterarModo(\"autonomo\")'>Modo Autônomo</button>"
 "<!-- IFrame -->"
 "<div class='block iframe-container'>"
 "<iframe class='responsive-iframe' src='https://www.example.com' frameborder='0' allowfullscreen></iframe>"
@@ -475,6 +475,7 @@ servidorWeb.on("/alterarModo", HTTP_GET, [](AsyncWebServerRequest *request) {
   }
   request->send(200);
 });
+
  servidorWeb.on("/obterEstado", HTTP_GET, [](AsyncWebServerRequest *request) {
     // Obter valores do sistema
     bool estadoExaustor = digitalRead(exaustorPin);
