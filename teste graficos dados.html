@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto';
+            /* Adicionei uma cor de fundo para visualização */
+        }
+
+        .col-10 {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+            /* Centraliza os gráficos na página */
+        }
+
+        .overview-charts {
+            display: flex;
+            flex-direction: column;
+            /* Alteração para posição vertical */
+            align-items: center;
+            justify-content: center;
+        }
+
+        .overview-charts-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #32323e;
+            border: 1px solid #3E3E4C;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 15px;
+            /* Adiciona margem entre os gráficos */
+        }
+
+        .circle-inner {
+            fill: transparent;
+            stroke-width: 1;
+            opacity: .3;
+            stroke: white;
+            height: 120px;
+            width: 130px;
+        }
+
+        .arc-text,
+        .circle-text {
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .arc-inner-circle {
+            fill: none;
+            stroke: white;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-width: 2px;
+            stroke-dasharray: 0 9;
+            opacity: 0.8;
+        }
+
+        .arc-outter-circle-filled {
+            fill: none;
+            stroke-dasharray: 342.90185546875;
+            stroke-dashoffset: -50;
+            stroke: #94D6FF;
+            stroke-width: 3;
+            shape-rendering: geometricPrecision;
+            animation: loadArc 3s;
+        }
+
+        .circle-outer {
+            animation: load 4s cubic-bezier(0, .49, 1, .37);
+        }
+
+        @keyframes load {
+            0% {
+                stroke-dashoffset: 439.1124572753906
+            }
+        }
+
+        @keyframes loadArc {
+            0% {
+                stroke-dashoffset: -342.90185546875
+            }
+        }
+
+        text tspan {
+            font-size: 20px;
+        }
+
+        /* Adicionando regras de mídia para tornar responsivo */
+        @media only screen and (max-width: 768px) {
+            .col-10 {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="col-10">
+        <div class="overview-charts">
+            <div class="overview-charts-container" id="chart-container">
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var chartContainer = document.getElementById('chart-container');
+
+        let circleLength = 439.1124572753906;
+
+        var data = [
+            { id: 1, temperature: 25, title: 'Temperatura', unit: '°C' },
+            { id: 2, humidity: 100, title: 'Umidade', unit: '%' },
+            { id: 3, soilHumidity: 65, title: 'Umidade do Solo', unit: '%' }
+        ]
+
+        const creatSvg = (elementValue, title, valueText, unit, svgColor) => {
+            let svg = `
+                <div class="overview-charts-container">
+                    <svg height="190" width="170">
+                        <g>
+                            <circle class="circle-inner" cx="80" cy="80" r="65"/>
+                            <text fill="white" x="85" y="85" font-size="30" dominant-baseline="middle" text-anchor="middle">${valueText}${unit}</text>
+                        </g>
+                        <circle stroke-dasharray="${circleLength}"
+                                stroke-dashoffset="${elementValue}"
+                                stroke="${svgColor}"
+                                cx="20" cy="80" r="70"
+                                stroke-width="3"
+                                fill="transparent"
+                                stroke-linecap="round"
+                                class="circle-outer"
+                                transform="rotate(-90) translate(-100 0)" />
+                        <text class="circle-text"
+                                fill="white" 
+                                x="85" y="180" 
+                                dominant-baseline="middle" 
+                                text-anchor="middle" 
+                                font-weight="bold">${title}</text>
+                    </svg>
+                </div>
+            `;
+            chartContainer.insertAdjacentHTML('beforeend', svg);
+        }
+
+        data.map(element => {
+            let { temperature, humidity, soilHumidity, title, unit } = element;
+            let value = temperature || humidity || soilHumidity;
+            let elementValue = circleLength - ((value / 100) * circleLength);
+            let svgColor;
+
+            if (title === 'Umidade' && humidity !== undefined) {
+                // Updated logic for humidity
+                if (humidity <= 45) {
+                    svgColor = '#ff3333'; // Vermelho
+                } else if (humidity > 45 && humidity <= 60) {
+                    svgColor = '#ff9900'; // Laranja
+                } else if (humidity > 60 && humidity <= 70) {
+                    svgColor = '#ffff00'; // Amarelo
+                } else if (humidity > 70) {
+                    svgColor = '#33cc33'; // Verde
+                }
+            } else if (title === 'Umidade do Solo' && soilHumidity !== undefined) {
+                // Apply the same logic for Soil Humidity
+                if (soilHumidity <= 45) {
+                    svgColor = '#ff3333'; // Vermelho
+                } else if (soilHumidity > 45 && soilHumidity <= 60) {
+                    svgColor = '#ff9900'; // Laranja
+                } else if (soilHumidity > 60 && soilHumidity <= 70) {
+                    svgColor = '#ffff00'; // Amarelo
+                } else if (soilHumidity > 70) {
+                    svgColor = '#33cc33'; // Verde
+                }
+            } else {
+                // Your logic for other parameters
+                if (value < 10) {
+                    svgColor = '#3366cc'; // Azul
+                } else if (value >= 10 && value <= 27) {
+                    svgColor = '#33cc33'; // Verde
+                } else if (value > 27) {
+                    svgColor = '#ff3333'; // Vermelho
+                }
+            }
+
+            creatSvg(elementValue, title, value, unit, svgColor);
+        });
+
+        let testCircle = document.querySelector('.arc-outter-circle-filled');
+        let getValue = testCircle.getBoundingClientRect();
+        console.log(getValue);
+    </script>
+</body>
+
+</html>
