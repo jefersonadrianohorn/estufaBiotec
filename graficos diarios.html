@@ -67,23 +67,29 @@
 <body>
     <div class="container">
         <div class="chart-container">
-            <h3>Gráfico de Linha para Temperatura</h3>
+            <h3>Temperatura (°C)</h3>
             <canvas id="temperaturaChart" width="400" height="300"></canvas>
         </div>
 
         <div class="chart-container">
-            <h3>Gráfico de Linha para Umidade</h3>
+            <h3>Umidade (%)</h3>
             <canvas id="umidadeChart" width="400" height="300"></canvas>
         </div>
 
         <div class="chart-container">
-            <h3>Gráfico de Linha para Umidade do Solo</h3>
+            <h3>Umidade do Solo (%)</h3>
             <canvas id="umidadeSoloChart" width="400" height="300"></canvas>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // Inicia o carregamento automático a cada 10 segundos
+            setInterval(function () {
+                carregarDadosCSV();
+            }, 10000);
+
+            // Carrega dados CSV pela primeira vez
             carregarDadosCSV();
         });
 
@@ -133,7 +139,7 @@
             const umidadeData = dadosDoDia.map(dado => parseFloat(dado[1]));
             const umidadeSoloData = dadosDoDia.map(dado => parseFloat(dado[2]));
 
-            new Chart(document.getElementById('temperaturaChart').getContext('2d'), {
+            const temperaturaChart = new Chart(document.getElementById('temperaturaChart').getContext('2d'), {
                 type: 'line',
                 data: {
                     labels: labels,
@@ -147,11 +153,20 @@
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    return context.dataset.label + ': ' + context.formattedValue + ' °C';
+                                }
+                            }
+                        }
+                    }
                 }
             });
 
-            new Chart(document.getElementById('umidadeChart').getContext('2d'), {
+            const umidadeChart = new Chart(document.getElementById('umidadeChart').getContext('2d'), {
                 type: 'line',
                 data: {
                     labels: labels,
@@ -167,15 +182,21 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: {
-                            min: 0,
-                            max: 100
+                       
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    return context.dataset.label + ': ' + context.formattedValue + '%';
+                                }
+                            }
                         }
                     }
                 }
             });
 
-            new Chart(document.getElementById('umidadeSoloChart').getContext('2d'), {
+            const umidadeSoloChart = new Chart(document.getElementById('umidadeSoloChart').getContext('2d'), {
                 type: 'line',
                 data: {
                     labels: labels,
@@ -191,9 +212,15 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: {
-                            min: 0,
-                            max: 100
+                        
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function (context) {
+                                    return context.dataset.label + ': ' + context.formattedValue + '%';
+                                }
+                            }
                         }
                     }
                 }
