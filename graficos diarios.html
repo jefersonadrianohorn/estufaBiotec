@@ -88,7 +88,7 @@
         });
 
         function carregarDadosCSV() {
-            const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSdnt6JSUPeMmPh5n95mk6BdMY0MB8SHSCktDee1zjDPsyO8rKe8AVsN08GzLbZWKrcdyyjDlZBKlzz/pub?output=csv') + '&_=' + Date.now();
+            const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSHBprMhNfqgtPZ5dr4RBM_6p5bXKYR9r5nCeWQbd28K33hiT5yxNxGacjJcax8dXHEgebVhu3acfg1/pub?output=csv') + '&_=' + Date.now();
 
             fetch(url)
                 .then(response => response.text())
