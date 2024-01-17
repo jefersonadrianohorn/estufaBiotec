@@ -1,0 +1,169 @@
+function doGet() {
+  var config = getCurrentConfig();
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Configurações Atuais');
+}
+
+function getCurrentConfig() {
+  var spreadsheetId = '1wq0w41ay9U5vBjCPePq0eyTbXp6Mr9uVpipWnHixD5s';
+  var sheet = SpreadsheetApp.openById(spreadsheetId).getActiveSheet();
+  var lastRow = sheet.getLastRow();
+  
+  if (lastRow > 0) {
+    var lastRowData = sheet.getRange(lastRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+    return {
+      emailStatus: lastRowData[0],
+      notificationStatus: lastRowData[1]
+    };
+  } else {
+    return {
+      emailStatus: 'N/A',
+      notificationStatus: 'N/A'
+    };
+  }
+}
+
+function processForm(form) {
+  var spreadsheetId = '1wq0w41ay9U5vBjCPePq0eyTbXp6Mr9uVpipWnHixD5s';
+  var sheet = SpreadsheetApp.openById(spreadsheetId).getActiveSheet();
+  var lastRow = sheet.getLastRow();
+
+  if (lastRow > 0) {
+    var lastRowData = sheet.getRange(lastRow, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+    for (var i = 0; i < lastRowData.length; i++) {
+      if (form.hasOwnProperty('emailStatus') && i === 0) {
+        lastRowData[i] = form.emailStatus;
+      } else if (form.hasOwnProperty('notificationStatus') && i === 1) {
+        lastRowData[i] = form.notificationStatus;
+      }
+    }
+
+    sheet.getRange(lastRow, 1, 1, lastRowData.length).setValues([lastRowData]);
+  } else {
+    var rowData = ['', ''];
+    if (form.hasOwnProperty('emailStatus')) {
+      rowData[0] = form.emailStatus;
+    }
+    if (form.hasOwnProperty('notificationStatus')) {
+      rowData[1] = form.notificationStatus;
+    }
+    sheet.appendRow(rowData);
+  }
+}
+
+
+
+
+// html
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+
+      h2 {
+        color: #333;
+      }
+
+      form {
+        max-width: 400px;
+        margin-top: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 5px;
+      }
+
+      select {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+
+      input[type="submit"] {
+        background-color: #4CAF50;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      input[type="submit"]:hover {
+        background-color: #45a049;
+      }
+
+      #loadingMessage {
+        display: none;
+        margin-top: 10px;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body onload="displayCurrentConfig()">
+    <h2>Resumo das Configurações Atuais</h2>
+    <div id="currentConfig"></div>
+    <div id="loadingMessage">Carregando...</div>
+
+    <form id="myForm" onsubmit="handleFormSubmit(this)">
+      <label for="emailStatus">Envio de E-mail:</label>
+      <select id="emailStatus" name="emailStatus">
+        <option value="Ativo" id="emailStatusAtivo">Ativo</option>
+        <option value="Inativo" id="emailStatusInativo">Inativo</option>
+      </select>
+
+      <br>
+
+      <label for="notificationStatus">Envio de Notificação:</label>
+      <select id="notificationStatus" name="notificationStatus">
+        <option value="Ativo" id="notificationStatusAtivo">Ativo</option>
+        <option value="Inativo" id="notificationStatusInativo">Inativo</option>
+      </select>
+
+      <br>
+
+      <input type="submit" value="Enviar">
+    </form>
+
+    <script>
+      function displayCurrentConfig() {
+        // Exibir a mensagem de carregamento
+        document.getElementById('loadingMessage').style.display = 'block';
+
+        google.script.run.withSuccessHandler(function(config) {
+          // Atualizar a exibição após obter os estados atuais
+          updateConfigDisplay(config);
+
+          // Esconder a mensagem de carregamento
+          document.getElementById('loadingMessage').style.display = 'none';
+        }).getCurrentConfig();
+      }
+
+      function updateConfigDisplay(config) {
+        var displayElement = document.getElementById('currentConfig');
+        displayElement.innerHTML = '<p><strong>Email Status:</strong> ' + config.emailStatus + '</p>' +
+                                   '<p><strong>Notification Status:</strong> ' + config.notificationStatus + '</p>';
+
+        // Definir as opções selecionadas com base nos estados atuais
+        document.getElementById('emailStatus' + config.emailStatus).selected = true;
+        document.getElementById('notificationStatus' + config.notificationStatus).selected = true;
+      }
+
+      function handleFormSubmit(formObject) {
+        google.script.run.processForm(formObject);
+        document.getElementById("myForm").reset();
+        displayCurrentConfig();
+      }
+    </script>
+  </body>
+</html>
