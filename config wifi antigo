@@ -1,0 +1,55 @@
+bool configurarWiFi() {
+  Serial.println("Conectando à rede Wi-Fi...");
+
+  for (int tentativa = 0; tentativa < 10; tentativa++) {
+    WiFi.begin(ssid, password);
+    Serial.printf("Tentativa %d de conexão à rede Wi-Fi...\n", tentativa + 1);
+
+    int contagem = 0;
+    while (WiFi.status() != WL_CONNECTED && contagem < 20) {
+      delay(500);
+      Serial.print(".");
+      contagem++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\nConectado à rede Wi-Fi com sucesso!");
+      digitalWrite(pinoLED, LOW);
+      Serial.print("Endereço IP do sistema: ");
+      tempoInicioSemConexao = 0;
+      Serial.println(WiFi.localIP());
+      return true;    // Conexão bem-sucedida, retorna true
+      
+       if (!MDNS.begin("estufa")) {
+    Serial.println("Error setting up MDNS responder!");
+    while (1) {
+      delay(1000);
+    }
+  }
+  Serial.println("mDNS responder started");
+  
+    } else {
+      Serial.println("\nFalha ao conectar à rede Wi-Fi. Tentando novamente...");
+      delay(100);
+    }
+  }
+
+  Serial.println("Número máximo de tentativas alcançado. Continuando execução do código.");
+  return false;  // Após 10 tentativas, retorna false
+  digitalWrite(pinoLED, HIGH);
+}
+
+void verificaConexao() {
+  if (WiFi.status() != WL_CONNECTED) {
+    // Verifica se está sem conexão Wi-Fi por mais de 30 minutos
+    if (tempoInicioSemConexao == 0) {
+      tempoInicioSemConexao = millis();
+    } else if (millis() - tempoInicioSemConexao >= tempoLimiteSemConexao) {
+      Serial.println("Reiniciando Estufa devido à falta de conexão Wi-Fi por 30 minutos.");
+      ESP.restart();
+    }
+  } else {
+    // Resetar o contador de tempo quando houver uma conexão ativa
+    tempoInicioSemConexao = 0;
+  }
+}
